@@ -130,6 +130,12 @@ defmodule GraphQL.Execution.Executor.ExecutorTest do
   end
 
   test "lists of things" do
+    books = [
+      %{title: "To Kill a Mockingbird", author: "Harper Lee"},
+      %{title: "Animal Farm",           author: "George Orwell"},
+      %{title: "Lord of the Flies",     author: "William Golding"}
+    ]
+
     schema = %GraphQL.Schema{
       query: %GraphQL.ObjectType{
         name: "ListsOfThings",
@@ -143,24 +149,26 @@ defmodule GraphQL.Execution.Executor.ExecutorTest do
               of: %GraphQL.ObjectType{
                 name: "Book",
                 fields: %{
-                  title: %{ type: "String" }
+                  title: %{type: "String"},
+                  author: %{type: "String"}
                 }
               }
             },
             resolve: fn(_, _, _) ->
-              [%{title: "A"}, %{title: "B"}]
+              books
             end
           }
         }
       }
     }
 
-    assert_execute {"{numbers books}", schema},
+    assert_execute {"{numbers books{title}}", schema},
       %{
         "numbers" => [1, 2],
         "books" => [
-          %{title: "A"},
-          %{title: "B"}
+          %{title: "To Kill a Mockingbird"},
+          %{title: "Animal Farm"},
+          %{title: "Lord of the Flies"}
         ]
       }
   end
