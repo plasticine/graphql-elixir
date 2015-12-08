@@ -126,6 +126,7 @@ defmodule GraphQL.Execution.Executor do
 
   defp field_definition(_schema, parent_type, field_name) do
     # TODO deal with introspection
+    IO.inspect parent_type.fields[String.to_atom field_name]
     parent_type.fields[String.to_atom field_name]
   end
 
