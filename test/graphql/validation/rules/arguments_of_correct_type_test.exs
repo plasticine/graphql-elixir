@@ -32,6 +32,6 @@ defmodule GraphQL.Validation.Rules.ArgumentsOfCorrectTypeTest do
   end
 
   test "basic query validation" do
-    assert_validation {"{ greeting(name:123) }", TestSchema.schema}, %{"greeting" => "Hello, world!"}
+    assert_validation {"{ greeting(name:123) }", TestSchema.schema}, {:error, "herp derp"}
   end
 end
