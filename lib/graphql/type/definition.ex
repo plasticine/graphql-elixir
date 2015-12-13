@@ -5,3 +5,7 @@ end
 defmodule GraphQL.List do
   defstruct of_type: nil
 end
+
+
+defmodule GraphQL.NonNull do
+end

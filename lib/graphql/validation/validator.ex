@@ -1,17 +1,18 @@
 defmodule GraphQL.Validation.Validator do
   def validate(schema, document) do
-    context = validation_context(schema, document)
-    rules |> Enum.map(fn(mod) -> apply(mod, :validate, [context]) end)
+    context = %GraphQL.Validation.Context{schema: schema, document: document}
+    rules
+    |> Enum.map(fn(rule) -> apply(rule, :validate, [context]) end)
+    |> visit(document)
 
-    {:ok, document}
+    case GraphQL.Validation.Context.getErrors(context) do
+      {:ok, _}         -> {:ok, document}
+      {:error, errors} -> {:error, errors}
+    end
   end
 
-  defp validation_context(schema, document) do
-    %{
-      schema: schema,
-      document: document,
-      errors: []
-    }
+  defp visit(visitors, document) do
+
   end
 
   defp rules do
