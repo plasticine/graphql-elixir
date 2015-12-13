@@ -18,7 +18,7 @@ First, add GraphQL to your `mix.exs` dependencies:
 
 ```elixir
 defp deps do
-  [{:graphql, "~> 0.0.6"}]
+  [{:graphql, "~> 0.0.8"}]
 end
 ```
 
@@ -71,7 +71,7 @@ This is a work in progress, right now here's what is done:
   - [x] Scalar types
   - [x] Arguments
   - [x] Multiple forms of resolution
-  - [ ] Complex types (List, Object, etc)
+  - [x] Complex types (List, Object, etc)
   - [ ] Fragments in queries
   - [ ] Extract variable values
 - [ ] Query validation

@@ -110,18 +110,28 @@ defmodule GraphQL.Execution.Executor do
   end
 
   defp complete_value(context, %GraphQL.ObjectType{} = return_type, field_asts, _info, result) do
-    sub_field_asts = Enum.reduce field_asts, %{}, fn(field_ast, sub_field_asts) ->
+    sub_field_asts = collect_sub_fields(context, return_type, field_asts)
+    execute_fields(context, return_type, result, sub_field_asts)
+  end
+
+  defp complete_value(context, %GraphQL.List{of_type: list_type} = return_type, field_asts, info, result) do
+    Enum.map result, fn(item) ->
+      complete_value_catching_error(context, return_type.of_type, field_asts, info, item)
+    end
+  end
+
+  defp complete_value(_context, _return_type, _field_asts, _info, result) do
+    result
+  end
+
+  defp collect_sub_fields(context, return_type, field_asts) do
+    Enum.reduce field_asts, %{}, fn(field_ast, sub_field_asts) ->
       if selection_set = Map.get(field_ast, :selectionSet) do
         collect_fields(context, return_type, selection_set, sub_field_asts)
       else
         sub_field_asts
       end
     end
-    execute_fields(context, return_type, result, sub_field_asts)
-  end
-
-  defp complete_value(_context, _return_type, _field_asts, _info, result) do
-    result
   end
 
   defp field_definition(_schema, parent_type, field_name) do
