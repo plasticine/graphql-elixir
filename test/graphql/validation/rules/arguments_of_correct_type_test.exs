@@ -18,7 +18,7 @@ defmodule GraphQL.Validation.Rules.ArgumentsOfCorrectTypeTest do
             greeting: %{
               type: "String",
               args: %{
-                name: %{ type: "Butts" }
+                name: %{ type: "String" }
               },
               resolve: &greeting/3,
             }
@@ -31,7 +31,7 @@ defmodule GraphQL.Validation.Rules.ArgumentsOfCorrectTypeTest do
     def greeting(_, _, _), do: "Hello, world!"
   end
 
-  test "basic query validation" do
+  test "type is an int" do
     assert_validation {"{ greeting(name:123) }", TestSchema.schema}, {:error, "herp derp"}
   end
 end
