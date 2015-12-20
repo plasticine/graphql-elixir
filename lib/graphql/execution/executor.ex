@@ -14,36 +14,48 @@ defmodule GraphQL.Execution.Executor do
   """
   def execute(schema, document, root_value \\ %{}, variable_values \\ %{}, operation_name \\ nil) do
     context = build_execution_context(schema, document, root_value, variable_values, operation_name)
-    {:ok, {data, _errors}} = execute_operation(context, context.operation, root_value)
-    {:ok, data}
+    case context.errors do
+      [] -> execute_operation(context, context.operation, root_value)
+      _  -> {:error, %{errors: context.errors}}
+    end
+  end
+
+  defp report_error(context, msg) do
+    put_in(context.errors, [%{message: msg} | context.errors])
   end
 
   defp build_execution_context(schema, document, root_value, variable_values, operation_name) do
-    %{
+    Enum.reduce document.definitions, %{
       schema: schema,
       fragments: %{},
       root_value: root_value,
-      operation: find_operation(document, operation_name),
+      operation: nil,
       variable_values: variable_values,
       errors: []
-    }
+    }, fn(definition, context) ->
+      case definition do
+        %{kind: :OperationDefinition} ->
+          cond do
+            !operation_name && context.operation ->
+              report_error(context, "Must provide operation name if query contains multiple operations.")
+            !operation_name || definition.name === operation_name ->
+              put_in(context.operation, definition)
+            true -> context
+          end
+        %{kind: :FragmentDefinition} ->
+          put_in(context.fragments[definition.name], definition)
+      end
+    end
   end
 
   defp execute_operation(context, operation, root_value) do
     type = operation_root_type(context.schema, operation)
-    fields = collect_fields(context, type, operation.selectionSet)
-    result = case operation.operation do
-      :mutation -> execute_fields_serially(context, type, root_value, fields)
-      _ -> execute_fields(context, type, root_value, fields)
-    end
-    {:ok, {result, nil}}
-  end
-
-  defp find_operation(document, operation_name) do
-    if operation_name do
-      Enum.find(document.definitions, fn(definition) -> definition.name == operation_name end)
-    else
-      hd(document.definitions)
+    %{fields: fields} = collect_fields(context, type, operation.selectionSet)
+    case operation.operation do
+      :query        -> {:ok, execute_fields(context, type, root_value, fields)}
+      :mutation     -> {:ok, execute_fields_serially(context, type, root_value, fields)}
+      :subscription -> {:error, "Subscriptions not currently supported"}
+      _             -> {:error, "Can only execute queries, mutations and subscriptions"}
     end
   end
 
@@ -51,19 +63,30 @@ defmodule GraphQL.Execution.Executor do
     Map.get(schema, operation.operation)
   end
 
-  defp collect_fields(_context, _runtime_type, selection_set, fields \\ %{}, _visited_fragment_names \\ %{}) do
-    Enum.reduce selection_set[:selections], fields, fn(selection, fields) ->
+  defp collect_fields(context, runtime_type, selection_set, field_fragment_map \\ %{fields: %{}, fragments: %{}}) do
+    Enum.reduce selection_set[:selections], field_fragment_map, fn(selection, field_fragment_map) ->
       case selection do
-        %{kind: :Field} -> Map.put(fields, field_entry_key(selection), [selection])
-        _ -> fields
+        %{kind: :Field} -> put_in(field_fragment_map.fields[field_entry_key(selection)], [selection])
+        %{kind: :InlineFragment} -> field_fragment_map
+        %{kind: :FragmentSpread} ->
+          fragment_name = selection.name
+          if !field_fragment_map.fragments[fragment_name] do
+            field_fragment_map = put_in(field_fragment_map.fragments[fragment_name], true)
+            collect_fields(context, runtime_type, context.fragments[fragment_name].selectionSet, field_fragment_map)
+          else
+            field_fragment_map
+          end
+        _ -> field_fragment_map
       end
     end
   end
 
-  # source_value -> root_value?
   defp execute_fields(context, parent_type, source_value, fields) do
     Enum.reduce fields, %{}, fn({field_name, field_asts}, results) ->
-      Map.put results, field_name, resolve_field(context, parent_type, source_value, field_asts)
+      case resolve_field(context, parent_type, source_value, field_asts) do
+        nil -> results
+        value -> Map.put results, String.to_atom(field_name), value
+      end
     end
   end
 
@@ -74,34 +97,31 @@ defmodule GraphQL.Execution.Executor do
 
   defp resolve_field(context, parent_type, source, field_asts) do
     field_ast = hd(field_asts)
-    field_name = field_ast.name
-    field_def = field_definition(context.schema, parent_type, field_name)
-    return_type = field_def.type
+    field_name = String.to_atom(field_ast.name)
+    if field_def = field_definition(context.schema, parent_type, field_name) do
+      return_type = field_def.type
 
-    args = argument_values(Map.get(field_def, :args, %{}), Map.get(field_ast, :arguments, %{}), context.variable_values)
-    info = %{
-      field_name: field_name,
-      field_asts: field_asts,
-      return_type: return_type,
-      parent_type: parent_type,
-      schema: context.schema,
-      fragments: context.fragments,
-      root_value: context.root_value,
-      operation: context.operation,
-      variable_values: context.variable_values
-    }
-    resolve_fn = Map.get(field_def, :resolve, &default_resolve_fn/3)
-    result = case resolve_fn do
-      {mod, fun}    -> apply(mod, fun, [source, args, info])
-      {mod, fun, _} -> apply(mod, fun, [source, args, info])
-      resolve when is_function(resolve) -> resolve.(source, args, info)
-      _ -> {:error, "Resolve function must be a {module, function} tuple (or a lambda)"}
+      args = argument_values(Map.get(field_def, :args, %{}), Map.get(field_ast, :arguments, %{}), context.variable_values)
+      info = %{
+        field_name: field_name,
+        field_asts: field_asts,
+        return_type: return_type,
+        parent_type: parent_type,
+        schema: context.schema,
+        fragments: context.fragments,
+        root_value: context.root_value,
+        operation: context.operation,
+        variable_values: context.variable_values
+      }
+      resolution = Map.get(field_def, :resolve, source[field_name])
+      result = case resolution do
+        {mod, fun}    -> apply(mod, fun, [source, args, info])
+        {mod, fun, _} -> apply(mod, fun, [source, args, info])
+        resolve when is_function(resolve) -> resolve.(source, args, info)
+        _ -> resolution
+      end
+      complete_value_catching_error(context, return_type, field_asts, info, result)
     end
-    complete_value_catching_error(context, return_type, field_asts, info, result)
-  end
-
-  defp default_resolve_fn(source, _args, %{field_name: field_name}) do
-    source[field_name]
   end
 
   defp complete_value_catching_error(context, return_type, field_asts, info, result) do
@@ -111,12 +131,12 @@ defmodule GraphQL.Execution.Executor do
 
   defp complete_value(context, %GraphQL.ObjectType{} = return_type, field_asts, _info, result) do
     sub_field_asts = collect_sub_fields(context, return_type, field_asts)
-    execute_fields(context, return_type, result, sub_field_asts)
+    execute_fields(context, return_type, result, sub_field_asts.fields)
   end
 
-  defp complete_value(context, %GraphQL.List{of_type: list_type} = return_type, field_asts, info, result) do
+  defp complete_value(context, %GraphQL.List{of_type: list_type}, field_asts, info, result) do
     Enum.map result, fn(item) ->
-      complete_value_catching_error(context, return_type.of_type, field_asts, info, item)
+      complete_value_catching_error(context, list_type, field_asts, info, item)
     end
   end
 
@@ -125,18 +145,18 @@ defmodule GraphQL.Execution.Executor do
   end
 
   defp collect_sub_fields(context, return_type, field_asts) do
-    Enum.reduce field_asts, %{}, fn(field_ast, sub_field_asts) ->
+    Enum.reduce field_asts, %{fields: %{}, fragments: %{}}, fn(field_ast, field_fragment_map) ->
       if selection_set = Map.get(field_ast, :selectionSet) do
-        collect_fields(context, return_type, selection_set, sub_field_asts)
+        collect_fields(context, return_type, selection_set, field_fragment_map)
       else
-        sub_field_asts
+        field_fragment_map
       end
     end
   end
 
   defp field_definition(_schema, parent_type, field_name) do
     # TODO deal with introspection
-    parent_type.fields[String.to_atom field_name]
+    parent_type.fields[field_name]
   end
 
   defp argument_values(arg_defs, arg_asts, variable_values) do
