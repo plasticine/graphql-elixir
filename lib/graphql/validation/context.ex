@@ -8,4 +8,8 @@ defmodule GraphQL.Validation.Context do
   def getErrors(context) do
     {:ok, []}
   end
+
+  def getArgument(context) do
+    {:ok, nil}
+  end
 end

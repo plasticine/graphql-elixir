@@ -9,7 +9,7 @@ defmodule GraphQL.Utilities do
   def is_valid_literal_value(type, value) do
     # case type do
     #   # A value must be provided if the type is non-null.
-    #   %GraphQL.NonNull{} ->
+    #   %GraphQL.Type.NonNull{} ->
 
     #   # Lists accept a non-list value as a list of one.
     #   #
