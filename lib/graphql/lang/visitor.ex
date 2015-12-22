@@ -45,21 +45,19 @@ defmodule GraphQL.Lang.Visitor do
     TypeExtensionDefinition: ["definition" ]
   }
 
-  def visit(root, visitor = %{}) do
-    node = nil
+  def visit(root, visitors = %{}) do
     parent = root
     keys = keys(root)
     in_list = is_list(root)
     index = -1
     stack = %Stack{}
-    {:ok, result} = traverse(node, parent, keys, in_list, index, stack, visitor)
+    {:ok, result} = traverse(parent, keys, in_list, index, stack, visitors)
   end
 
-  def traverse(_, _, _, _, _, nil, _) do
-    {:ok, "RESULT!"}
-  end
-
-  def traverse(node, parent, keys, in_list, index, stack, visitor, ancestors \\ {}) do
+  # TODO: Yuk
+  def traverse(parent, keys, in_list, index, stack, visitors), do: traverse(parent, keys, in_list, index, stack, visitors, {})
+  def traverse(_, _, _, _, nil, _, _), do: {:ok, "RESULT!"}
+  def traverse(parent, keys, in_list, index, stack, visitors, ancestors) do
     index = index + 1
     leaving = index === length(keys)
 
@@ -95,20 +93,19 @@ defmodule GraphQL.Lang.Visitor do
       end
     end
 
-    unless is_list(node) do
-      unless is_node(node) do
-        throw "Invalid AST Node: #{inspect(node)}"
-      end
-      visitor = get_visitor(visitor, node.kind, leaving)
-      if is_function(visitor, 5) do
-        path = "foo"
-        case visitor.(node, key, parent, path, ancestors) do
-          x -> IO.inspect x
+    if !is_nil(node) do
+      unless is_list(node) do
+        unless is_node(node) do
+          IO.inspect parent
+          throw "Invalid AST Node: #{inspect(node)}"
+        end
+        visitor = visitor(visitors, node.kind, leaving)
+        if is_function(visitor, 5) do
+          path = "foo"
+          visitor.(node, key, parent, path, ancestors)
         end
       end
-    end
 
-    if !is_nil(node) do
       if !leaving do
         stack = %Stack{in_list: in_list, index: index, keys: keys, previous: stack}
         in_list = is_list(node)
@@ -121,21 +118,25 @@ defmodule GraphQL.Lang.Visitor do
       end
     end
 
-    traverse(node, parent, keys, in_list, index, stack, visitor, ancestors)
+    traverse(parent, keys, in_list, index, stack, visitors, ancestors)
   end
 
   defp keys(node) when is_map(node),  do: Dict.get(@query_document_keys, node.kind, []) |> Enum.map(&String.to_atom/1)
   defp keys(node) when is_list(node), do: node |> Enum.map(fn(x) -> x.kind end)
   defp keys(_),                       do: []
 
-  defp get_visitor(visitor, kind, leaving) do
-    IO.inspect visitor
-    IO.inspect kind
-    IO.inspect leaving
-  end
-
-  defp apply_visitor(visitor, kind, action) do
-
+  defp visitor(visitors, kind, true),  do: visitor(visitors, kind, :leave)
+  defp visitor(visitors, kind, false), do: visitor(visitors, kind, :enter)
+  defp visitor(visitors, kind, action) when is_atom(action) do
+    cond do
+      Map.has_key?(visitors, kind) ->
+        case Map.get(visitors, kind) do
+          name when is_function(name, 5) -> name  # %{Kind: fn()}
+          name when is_map(name) -> Map.get(name, action)  # %{Kind: action: fn()}
+        end
+      Map.has_key?(visitors, action) -> get_in(visitors, [action]) # %{action: fn()}
+      true -> nil
+    end
   end
 
   defp is_node(node) do
