@@ -94,22 +94,10 @@ defmodule GraphQL.Lang.Visitor do
       cond do
         not is_list(node) and is_node(node) ->
           case get_visitor(visitors, node.kind, leaving) do
-            {action, visitor} ->
-              edit = visitor.(%{node: node, key: key, parent: parent, path: path, ancestors: ancestors})
-              case action do
-                :enter ->
-                  case edit do
-                    {:edit, false}       -> {:edit, false}  # don't visit this node
-                    {:edit, nil}         -> {:edit, nil}  # delete the node
-                    {:edit, replacement} -> {:edit, replacement}  # replace the node
-                    _ -> nil
-                  end
-                :leave ->
-                  case edit do
-                    {:edit, nil}         -> {:edit, nil}  # delete the node
-                    {:edit, replacement} -> {:edit, replacement}  # replace the node
-                    _ -> nil
-                  end
+            {type, visitor} ->
+              case visitor.(%{node: node, key: key, parent: parent, path: path, ancestors: ancestors}) do
+                %{node: action} -> edit(type, action, node)
+                _               -> nil
               end
             nil -> nil
           end
@@ -149,16 +137,16 @@ defmodule GraphQL.Lang.Visitor do
 
   defp get_visitor(visitors, kind, true),  do: get_visitor(visitors, kind, :leave)
   defp get_visitor(visitors, kind, false), do: get_visitor(visitors, kind, :enter)
-  defp get_visitor(visitors, kind, action) when is_atom(action) do
+  defp get_visitor(visitors, kind, type) when is_atom(type) do
     cond do
       Map.has_key?(visitors, kind) ->
         nameKey = Map.get(visitors, kind)
         cond do
-          is_map(nameKey)                              -> {action, Map.get(nameKey, action)}  # %{Kind: action: fn()}
-          is_function(nameKey, 1) and action == :enter -> {action, nameKey} # %{Kind: fn()}
+          is_map(nameKey)                              -> {type, Map.get(nameKey, type)}  # %{Kind: type: fn()}
+          is_function(nameKey, 1) and type == :enter -> {type, nameKey} # %{Kind: fn()}
           true                                         -> nil
         end
-      Map.has_key?(visitors, action) -> {action, get_in(visitors, [action])} # %{action: fn()}
+      Map.has_key?(visitors, type) -> {type, get_in(visitors, [type])} # %{type: fn()}
       true -> nil
     end
   end
@@ -166,4 +154,11 @@ defmodule GraphQL.Lang.Visitor do
   defp is_node(node) do
     is_map(node) and Map.has_key?(node, :kind) and is_atom(node.kind)
   end
+
+  defp edit(type, action, node) when is_atom(type) and is_map(node), do: edit(type, action, node)
+  defp edit(:enter, :skip, _node), do: nil                                 # don't visit this node
+  defp edit(:enter, :delete, _node), do: nil                               # delete the node
+  defp edit(:enter, replacement, _node) when is_map(replacement), do: nil  # replace the node
+  defp edit(:leave, :delete, _node), do: nil                               # delete the node
+  defp edit(:leave, replacement, _node) when is_map(replacement), do: nil  # replace the node
 end
