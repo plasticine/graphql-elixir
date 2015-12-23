@@ -71,12 +71,10 @@ defmodule GraphQL.Lang.Visitor do
       node = parent
       {key, path} = {List.last(path), Enum.drop(path, -1)}
 
-
       {parent, ancestors} = cond do
         length(ancestors) == 0 -> {nil, []}
         true                   -> {List.last(ancestors), Enum.drop(ancestors, -1)}
       end
-
 
       %{index: index, keys: keys, in_list: in_list, previous: stack} = stack
     else
@@ -86,7 +84,6 @@ defmodule GraphQL.Lang.Visitor do
         is_nil(parent)                     -> {root, nil}
         true                               -> {nil, nil}
       end
-
 
       if parent && not is_nil(node) do
         path = path ++ [key]
