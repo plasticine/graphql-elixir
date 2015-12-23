@@ -49,7 +49,7 @@ defmodule GraphQL.Lang.Visitor do
       stack: %Stack{},
       visitors: visitors,
       path: [],
-      ancestors: [],
+      ancestors: []
     }
 
     case visit(context) do
@@ -57,7 +57,7 @@ defmodule GraphQL.Lang.Visitor do
     end
   end
 
-  defp visit(%{stack: nil}), do: {:ok, "RESULT!"}
+  defp visit(%{stack: nil, root: root}), do: {:ok, root}
   defp visit(context) when is_map(context) do
     %{
       root: root, parent: parent, keys: keys, in_list: in_list, index: index,
@@ -107,7 +107,6 @@ defmodule GraphQL.Lang.Visitor do
 
       unless leaving do
         stack = %Stack{in_list: in_list, index: index, keys: keys, previous: stack}
-
         in_list = is_list(node)
         if parent do
           ancestors = ancestors ++ [parent]
@@ -118,17 +117,8 @@ defmodule GraphQL.Lang.Visitor do
       end
     end
 
-    visit(%{
-      root: root,
-      parent: parent,
-      keys: keys,
-      in_list: in_list,
-      index: index,
-      stack: stack,
-      visitors: visitors,
-      path: path,
-      ancestors: ancestors
-    })
+    visit(%{root: root, parent: parent, keys: keys, in_list: in_list, index: index,
+            stack: stack, visitors: visitors, path: path, ancestors: ancestors})
   end
 
   defp get_keys(node) when is_map(node),  do: Dict.get(@query_document_keys, node.kind, [])
@@ -137,14 +127,15 @@ defmodule GraphQL.Lang.Visitor do
 
   defp get_visitor(visitors, kind, true),  do: get_visitor(visitors, kind, :leave)
   defp get_visitor(visitors, kind, false), do: get_visitor(visitors, kind, :enter)
-  defp get_visitor(visitors, kind, type) when is_atom(type) do
+  defp get_visitor(visitors, kind, type) do
+    # this is pretty gross
     cond do
       Map.has_key?(visitors, kind) ->
         nameKey = Map.get(visitors, kind)
         cond do
-          is_map(nameKey)                              -> {type, Map.get(nameKey, type)}  # %{Kind: type: fn()}
+          is_map(nameKey)                            -> {type, Map.get(nameKey, type)}  # %{Kind: type: fn()}
           is_function(nameKey, 1) and type == :enter -> {type, nameKey} # %{Kind: fn()}
-          true                                         -> nil
+          true                                       -> nil
         end
       Map.has_key?(visitors, type) -> {type, get_in(visitors, [type])} # %{type: fn()}
       true -> nil
