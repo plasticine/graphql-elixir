@@ -94,8 +94,24 @@ defmodule GraphQL.Lang.Visitor do
       cond do
         not is_list(node) and is_node(node) ->
           case get_visitor(visitors, node.kind, leaving) do
+            {action, visitor} ->
+              edit = visitor.(%{node: node, key: key, parent: parent, path: path, ancestors: ancestors})
+              case action do
+                :enter ->
+                  case edit do
+                    {:edit, false}       -> {:edit, false}  # don't visit this node
+                    {:edit, nil}         -> {:edit, nil}  # delete the node
+                    {:edit, replacement} -> {:edit, replacement}  # replace the node
+                    _ -> nil
+                  end
+                :leave ->
+                  case edit do
+                    {:edit, nil}         -> {:edit, nil}  # delete the node
+                    {:edit, replacement} -> {:edit, replacement}  # replace the node
+                    _ -> nil
+                  end
+              end
             nil -> nil
-            visitor -> visitor.(%{node: node, key: key, parent: parent, path: path, ancestors: ancestors})
           end
         not is_list(node) -> throw "Invalid AST Node: #{inspect(node)}"
         true -> nil
@@ -138,11 +154,11 @@ defmodule GraphQL.Lang.Visitor do
       Map.has_key?(visitors, kind) ->
         nameKey = Map.get(visitors, kind)
         cond do
-          is_map(nameKey)                              -> Map.get(nameKey, action)  # %{Kind: action: fn()}
-          is_function(nameKey, 1) and action == :enter -> nameKey # %{Kind: fn()}
+          is_map(nameKey)                              -> {action, Map.get(nameKey, action)}  # %{Kind: action: fn()}
+          is_function(nameKey, 1) and action == :enter -> {action, nameKey} # %{Kind: fn()}
           true                                         -> nil
         end
-      Map.has_key?(visitors, action) -> get_in(visitors, [action]) # %{action: fn()}
+      Map.has_key?(visitors, action) -> {action, get_in(visitors, [action])} # %{action: fn()}
       true -> nil
     end
   end

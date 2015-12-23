@@ -7,9 +7,11 @@ defmodule GraphQL.Lang.Visitor.VisitorTest do
     GraphQL.Lang.Visitor.visit(doc, %{
       enter: fn(%{node: node}) ->
         send self, {:enter, node.kind, Dict.get(node, :value)}
+        nil
       end,
       leave: fn(%{node: node}) ->
         send self, {:leave, node.kind, Dict.get(node, :value)}
+        nil
       end
     })
 
@@ -39,19 +41,28 @@ defmodule GraphQL.Lang.Visitor.VisitorTest do
     assert_received {:leave, :Document, nil}
   end
 
-  test "named functions visitor" do
+  # test "editing on enter"
+  # test "editing on leave"
+  # test "skipping a sub-tree"
+  # test "early exit while entering"
+  # test "early exit while leaving"
+
+  test "named functions visitor API" do
     {:ok, doc} = GraphQL.Lang.Parser.parse("{ a, b { x }, c }")
 
     GraphQL.Lang.Visitor.visit(doc, %{
       Name: fn(%{node: node}) ->
         send self, {:enter, node.kind, Dict.get(node, :value)}
+        nil
       end,
       SelectionSet: %{
         enter: fn(%{node: node}) ->
           send self, {:enter, node.kind, Dict.get(node, :value)}
+          nil
         end,
         leave: fn(%{node: node}) ->
           send self, {:leave, node.kind, Dict.get(node, :value)}
+          nil
         end
       }
     })
@@ -104,9 +115,11 @@ defmodule GraphQL.Lang.Visitor.VisitorTest do
     GraphQL.Lang.Visitor.visit(doc, %{
       enter: fn(%{node: node, key: key, parent: parent}) ->
         send self, {:enter, node.kind, key, parent && Dict.get(parent, :kind)}
+        nil
       end,
       leave: fn(%{node: node, key: key, parent: parent}) ->
         send self, {:leave, node.kind, key, parent && Dict.get(parent, :kind)}
+        nil
       end
     })
 
