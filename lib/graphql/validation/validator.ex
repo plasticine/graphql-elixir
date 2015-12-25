@@ -1,9 +1,11 @@
 defmodule GraphQL.Validation.Validator do
+  alias GraphQL.Lang.Visitor
+
   def validate(schema, document) do
-    context = %GraphQL.Validation.Context{schema: schema, document: document}
+    context = context(schema, document)
     rules
     |> Enum.map(fn(rule) -> apply(rule, :validate, [context]) end)
-    |> visit(document)
+    |> Visitor.visit(document)
 
     case GraphQL.Validation.Context.getErrors(context) do
       {:ok, _}         -> {:ok, document}
@@ -11,8 +13,8 @@ defmodule GraphQL.Validation.Validator do
     end
   end
 
-  defp visit(visitors, document) do
-
+  def context(schema, document) do
+    %GraphQL.Validation.Context{schema: schema, document: document}
   end
 
   defp rules do
