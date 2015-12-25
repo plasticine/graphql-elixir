@@ -24,11 +24,9 @@ defmodule ExUnit.TestHelpers do
     {:ok, doc} = Parser.parse(query)
     assert Executor.execute(schema, doc) == {:error, expected_output}
   end
-  
+
   def assert_execute_error({query, schema, data}, expected_output) do
     {:ok, doc} = Parser.parse(query)
     assert Executor.execute(schema, doc, data) == {:error, expected_output}
   end
-
-
 end
