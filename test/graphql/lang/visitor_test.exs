@@ -5,12 +5,12 @@ defmodule GraphQL.Lang.Visitor.VisitorTest do
     {:ok, doc} = GraphQL.Lang.Parser.parse("{ a, b { x }, c }")
 
     GraphQL.Lang.Visitor.visit(doc, %{
-      enter: fn(%{node: node}) ->
-        send self, {:enter, node.kind, Dict.get(node, :value)}
+      enter: fn(%{item: item}) ->
+        send self, {:enter, item.kind, Dict.get(item, :value)}
         nil
       end,
-      leave: fn(%{node: node}) ->
-        send self, {:leave, node.kind, Dict.get(node, :value)}
+      leave: fn(%{item: item}) ->
+        send self, {:leave, item.kind, Dict.get(item, :value)}
         nil
       end
     })
@@ -51,17 +51,17 @@ defmodule GraphQL.Lang.Visitor.VisitorTest do
     {:ok, doc} = GraphQL.Lang.Parser.parse("{ a, b { x }, c }")
 
     GraphQL.Lang.Visitor.visit(doc, %{
-      Name: fn(%{node: node}) ->
-        send self, {:enter, node.kind, Dict.get(node, :value)}
+      Name: fn(%{item: item}) ->
+        send self, {:enter, item.kind, Dict.get(item, :value)}
         nil
       end,
       SelectionSet: %{
-        enter: fn(%{node: node}) ->
-          send self, {:enter, node.kind, Dict.get(node, :value)}
+        enter: fn(%{item: item}) ->
+          send self, {:enter, item.kind, Dict.get(item, :value)}
           nil
         end,
-        leave: fn(%{node: node}) ->
-          send self, {:leave, node.kind, Dict.get(node, :value)}
+        leave: fn(%{item: item}) ->
+          send self, {:leave, item.kind, Dict.get(item, :value)}
           nil
         end
       }
@@ -80,7 +80,7 @@ defmodule GraphQL.Lang.Visitor.VisitorTest do
   test "kitchen sink" do
     {:ok, doc} = GraphQL.Lang.Parser.parse("""
       query queryName($foo: ComplexType, $site: Site = MOBILE) {
-        whoever123is: node(id: [123, 456]) {
+        whoever123is: item(id: [123, 456]) {
           id ,
           ... on User @defer {
             field2 {
@@ -113,12 +113,12 @@ defmodule GraphQL.Lang.Visitor.VisitorTest do
     """)
 
     GraphQL.Lang.Visitor.visit(doc, %{
-      enter: fn(%{node: node, key: key, parent: parent}) ->
-        send self, {:enter, node.kind, key, parent && Dict.get(parent, :kind)}
+      enter: fn(%{item: item, key: key, parent: parent}) ->
+        send self, {:enter, item.kind, key, parent && Dict.get(parent, :kind)}
         nil
       end,
-      leave: fn(%{node: node, key: key, parent: parent}) ->
-        send self, {:leave, node.kind, key, parent && Dict.get(parent, :kind)}
+      leave: fn(%{item: item, key: key, parent: parent}) ->
+        send self, {:leave, item.kind, key, parent && Dict.get(parent, :kind)}
         nil
       end
     })

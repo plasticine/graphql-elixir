@@ -69,7 +69,7 @@ defmodule GraphQL.Lang.Visitor do
     leaving = index === length(keys)
 
     if leaving do
-      node = parent
+      item = parent
       {key, path} = {List.last(path), Enum.drop(path, -1)}
 
       {parent, ancestors} = cond do
@@ -79,42 +79,42 @@ defmodule GraphQL.Lang.Visitor do
 
       %{index: index, keys: keys, in_list: in_list, previous: stack} = stack
     else
-      {node, key} = cond do
+      {item, key} = cond do
         not is_nil(parent) and in_list     -> {Enum.at(parent, index), index}
         not is_nil(parent) and not in_list -> {Dict.get(parent, Enum.at(keys, index)), Enum.at(keys, index)}
         is_nil(parent)                     -> {root, nil}
         true                               -> {nil, nil}
       end
 
-      if parent && not is_nil(node) do
+      if parent && not is_nil(item) do
         path = path ++ [key]
       end
     end
 
-    unless is_nil(node) do
+    unless is_nil(item) do
       cond do
-        not is_list(node) and is_node(node) ->
-          case get_visitor(visitors, node.kind, leaving) do
+        not is_list(item) and is_item(item) ->
+          case get_visitor(visitors, item.kind, leaving) do
             {type, visitor} ->
-              case visitor.("DERP", %{node: node, key: key, parent: parent, path: path, ancestors: ancestors}) do
-                %{node: action} -> edit(type, action, node)
+              case visitor.(%{item: item, key: key, parent: parent, path: path, ancestors: ancestors}) do
+                %{item: action} -> edit(type, action, item)
                 _               -> nil
               end
             nil -> nil
           end
-        not is_list(node) -> throw "Invalid AST Node: #{inspect(node)}"
+        not is_list(item) -> throw "Invalid AST Node: #{inspect(item)}"
         true -> nil
       end
 
       unless leaving do
         stack = %Stack{in_list: in_list, index: index, keys: keys, previous: stack}
-        in_list = is_list(node)
+        in_list = is_list(item)
         if parent do
           ancestors = ancestors ++ [parent]
         end
-        keys = get_keys(node)
+        keys = get_keys(item)
         index = -1
-        parent = node
+        parent = item
       end
     end
 
@@ -122,8 +122,8 @@ defmodule GraphQL.Lang.Visitor do
             stack: stack, visitors: visitors, path: path, ancestors: ancestors})
   end
 
-  defp get_keys(node) when is_map(node),  do: Dict.get(@query_document_keys, node.kind, [])
-  defp get_keys(node) when is_list(node), do: node
+  defp get_keys(item) when is_map(item),  do: Dict.get(@query_document_keys, item.kind, [])
+  defp get_keys(item) when is_list(item), do: item
   defp get_keys(_),                       do: []
 
   defp get_visitor(visitors, kind, true),  do: get_visitor(visitors, kind, :leave)
@@ -132,10 +132,10 @@ defmodule GraphQL.Lang.Visitor do
     # this is pretty gross
     cond do
       Map.has_key?(visitors, kind) ->
-        nameKey = Map.get(visitors, kind)
+        name_key = Map.get(visitors, kind)
         cond do
-          is_map(nameKey)                            -> {type, Map.get(nameKey, type)}  # %{Kind: type: fn()}
-          is_function(nameKey, 2) and type == :enter -> {type, nameKey} # %{Kind: fn()}
+          is_map(name_key)                            -> {type, Map.get(name_key, type)}  # %{Kind: type: fn()}
+          is_function(name_key, 1) and type == :enter -> {type, name_key} # %{Kind: fn()}
           true -> nil
         end
       Map.has_key?(visitors, type) -> {type, get_in(visitors, [type])} # %{type: fn()}
@@ -143,14 +143,14 @@ defmodule GraphQL.Lang.Visitor do
     end
   end
 
-  defp is_node(node) do
-    is_map(node) and Map.has_key?(node, :kind) and is_atom(node.kind)
+  defp is_item(item) do
+    is_map(item) and Map.has_key?(item, :kind) and is_atom(item.kind)
   end
 
-  defp edit(type, action, node) when is_atom(type) and is_map(node), do: edit(type, action, node)
-  defp edit(:enter, :skip, _node), do: nil                                 # don't visit this node
-  defp edit(:enter, :delete, _node), do: nil                               # delete the node
-  defp edit(:enter, replacement, _node) when is_map(replacement), do: nil  # replace the node
-  defp edit(:leave, :delete, _node), do: nil                               # delete the node
-  defp edit(:leave, replacement, _node) when is_map(replacement), do: nil  # replace the node
+  defp edit(type, action, item) when is_atom(type) and is_map(item), do: edit(type, action, item)
+  defp edit(:enter, :skip, _item), do: nil                                 # don't visit this item
+  defp edit(:enter, :delete, _item), do: nil                               # delete the item
+  defp edit(:enter, replacement, _item) when is_map(replacement), do: nil  # replace the item
+  defp edit(:leave, :delete, _item), do: nil                               # delete the item
+  defp edit(:leave, replacement, _item) when is_map(replacement), do: nil  # replace the item
 end

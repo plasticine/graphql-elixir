@@ -9,14 +9,14 @@ defmodule GraphQL.Validation.Rules.ArgumentsOfCorrectType do
 
   def visitor do
     %{
-      Argument: fn(context, %{node: node}) ->
+      Argument: fn(%{item: item}) ->
         IO.inspect "GraphQL.Validation.Rules.ArgumentsOfCorrectType"
 
-        IO.inspect Context.get
-        IO.inspect context
+        # IO.inspect Context.get
+        # IO.inspect context
         # IO.inspect context.document
         # IO.inspect context.schema
-        IO.inspect node
+        # IO.inspect item
       end
     }
   end
