@@ -5,19 +5,18 @@
 #
 # https://github.com/graphql/graphql-js/blob/master/src/validation/rules/ArgumentsOfCorrectType.js
 defmodule GraphQL.Validation.Rules.ArgumentsOfCorrectType do
-  def validate(context) do
+  alias GraphQL.Validation.Context
+
+  def visitor do
     %{
-      Argument: fn() ->
+      Argument: fn(context, %{node: node}) ->
         IO.inspect "GraphQL.Validation.Rules.ArgumentsOfCorrectType"
 
-        argumentDefintion = context.getArgument()
-        if  argumentDefintion do
-          GraphQL.Utilities.is_valid_literal_value(argumentDefintion)
-        end
-
-        GraphQL.Lang.Visitor.visit(context.document, %{
-          enter: fn(%{node: node}) -> IO.inspect node.kind end
-        })
+        IO.inspect Context.get
+        IO.inspect context
+        # IO.inspect context.document
+        # IO.inspect context.schema
+        IO.inspect node
       end
     }
   end

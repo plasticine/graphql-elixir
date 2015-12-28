@@ -39,6 +39,7 @@ defmodule GraphQL.Lang.Visitor do
     TypeExtensionDefinition: [:definition]
   }
 
+  # Depth-first traversal through the tree.
   def visit(root, visitors) when is_map(visitors) do
     context = %{
       root: root,
@@ -95,7 +96,7 @@ defmodule GraphQL.Lang.Visitor do
         not is_list(node) and is_node(node) ->
           case get_visitor(visitors, node.kind, leaving) do
             {type, visitor} ->
-              case visitor.(%{node: node, key: key, parent: parent, path: path, ancestors: ancestors}) do
+              case visitor.("DERP", %{node: node, key: key, parent: parent, path: path, ancestors: ancestors}) do
                 %{node: action} -> edit(type, action, node)
                 _               -> nil
               end
@@ -134,8 +135,8 @@ defmodule GraphQL.Lang.Visitor do
         nameKey = Map.get(visitors, kind)
         cond do
           is_map(nameKey)                            -> {type, Map.get(nameKey, type)}  # %{Kind: type: fn()}
-          is_function(nameKey, 1) and type == :enter -> {type, nameKey} # %{Kind: fn()}
-          true                                       -> nil
+          is_function(nameKey, 2) and type == :enter -> {type, nameKey} # %{Kind: fn()}
+          true -> nil
         end
       Map.has_key?(visitors, type) -> {type, get_in(visitors, [type])} # %{type: fn()}
       true -> nil
