@@ -1,102 +1,83 @@
 defmodule GraphQL.Lang.Visitor do
-  defmodule Stack do
-    defstruct previous: nil, index: -1, keys: [], in_list: false
-  end
-
-  @query_document_keys %{
-    Name: [],
-    Document: [:definitions],
-    OperationDefinition: [:name, :variableDefinitions, :directives, :selectionSet],
-    VariableDefinition: [:variable, :type, :defaultValue],
-    Variable: [:name],
-    SelectionSet: [:selections],
-    Field: [:alias, :name, :arguments, :directives, :selectionSet],
-    Argument: [:name, :value],
-    FragmentSpread: [:name, :directives],
-    InlineFragment: [:typeCondition, :directives, :selectionSet],
-    FragmentDefinition: [:name, :typeCondition, :directives, :selectionSet],
-    IntValue: [],
-    FloatValue: [],
-    StringValue: [],
-    BooleanValue: [],
-    EnumValue: [],
-    ListValue: [:values],
-    ObjectValue: [:fields],
-    ObjectField: [:name, :value],
-    Directive: [:name, :arguments],
-    NamedType: [:name],
-    ListType: [:type],
-    NonNullType: [:type],
-    ObjectTypeDefinition: [:name, :interfaces, :fields],
-    FieldDefinition: [:name, :arguments, :type],
-    InputValueDefinition: [:name, :type, :defaultValue],
-    InterfaceTypeDefinition: [:name, :fields],
-    UnionTypeDefinition: [:name, :types],
-    ScalarTypeDefinition: [:name],
-    EnumTypeDefinition: [:name, :values],
-    EnumValueDefinition: [:name],
-    InputObjectTypeDefinition: [:name, :fields],
-    TypeExtensionDefinition: [:definition]
-  }
-
-  # Depth-first traversal through the tree.
-  def visit(root, visitors) when is_map(visitors) do
-    context = %{
-      root: root,
-      parent: nil,
-      keys: get_keys(root),
-      in_list: is_list(root),
-      index: -1,
-      stack: %Stack{},
-      visitors: visitors,
-      path: [],
-      ancestors: []
+  defmodule Node do
+    @kinds %{
+      Name: [],
+      Document: [:definitions],
+      OperationDefinition: [:name, :variableDefinitions, :directives, :selectionSet],
+      VariableDefinition: [:variable, :type, :defaultValue],
+      Variable: [:name],
+      SelectionSet: [:selections],
+      Field: [:alias, :name, :arguments, :directives, :selectionSet],
+      Argument: [:name, :value],
+      FragmentSpread: [:name, :directives],
+      InlineFragment: [:typeCondition, :directives, :selectionSet],
+      FragmentDefinition: [:name, :typeCondition, :directives, :selectionSet],
+      IntValue: [],
+      FloatValue: [],
+      StringValue: [],
+      BooleanValue: [],
+      EnumValue: [],
+      ListValue: [:values],
+      ObjectValue: [:fields],
+      ObjectField: [:name, :value],
+      Directive: [:name, :arguments],
+      NamedType: [:name],
+      ListType: [:type],
+      NonNullType: [:type],
+      ObjectTypeDefinition: [:name, :interfaces, :fields],
+      FieldDefinition: [:name, :arguments, :type],
+      InputValueDefinition: [:name, :type, :defaultValue],
+      InterfaceTypeDefinition: [:name, :fields],
+      UnionTypeDefinition: [:name, :types],
+      ScalarTypeDefinition: [:name],
+      EnumTypeDefinition: [:name, :values],
+      EnumValueDefinition: [:name],
+      InputObjectTypeDefinition: [:name, :fields],
+      TypeExtensionDefinition: [:definition]
     }
 
-    case visit(context) do
+    def children(item) when is_map(item),  do: Dict.get(@kinds, item.kind, [])
+    def children(item) when is_list(item), do: item
+    def children(_),                       do: []
+  end
+
+  defmodule Stack do
+    defstruct ancestors: [],
+              in_list: false,
+              index: -1,
+              key: nil,
+              keys: [],
+              parent: nil,
+              path: [],
+              previous: nil
+  end
+
+  # Depth-first traversal through the tree.
+  def visit(entrypoint, visitors) when is_map(visitors) do
+    context = %{entrypoint: entrypoint, visitors: visitors}
+    stack = %Stack{keys: Node.children(entrypoint), in_list: is_list(entrypoint)}
+
+    case walk(stack, context) do
       {:ok, result} -> {:ok, result}
     end
   end
 
-  defp visit(%{stack: nil, root: root}), do: {:ok, root}
-  defp visit(context) when is_map(context) do
-    %{
-      root: root, parent: parent, keys: keys, in_list: in_list, index: index,
-      stack: stack, visitors: visitors, path: path, ancestors: ancestors
-    } = context
+  defp walk(stack = nil, context), do: {:ok, context.entrypoint}
+  defp walk(stack = %Stack{}, context) do
+    stack = %Stack{stack | index: stack.index + 1}  # TODO: move me
+    is_leaving = leaving?(stack)
 
-    index = index + 1
-    leaving = index === length(keys)
-
-    if leaving do
-      item = parent
-      {key, path} = {List.last(path), Enum.drop(path, -1)}
-
-      {parent, ancestors} = cond do
-        length(ancestors) == 0 -> {nil, []}
-        true                   -> {List.last(ancestors), Enum.drop(ancestors, -1)}
-      end
-
-      %{index: index, keys: keys, in_list: in_list, previous: stack} = stack
-    else
-      {item, key} = cond do
-        not is_nil(parent) and in_list     -> {Enum.at(parent, index), index}
-        not is_nil(parent) and not in_list -> {Dict.get(parent, Enum.at(keys, index)), Enum.at(keys, index)}
-        is_nil(parent)                     -> {root, nil}
-        true                               -> {nil, nil}
-      end
-
-      if parent && not is_nil(item) do
-        path = path ++ [key]
-      end
+    {item, stack} = case is_leaving do
+      false -> enter(stack, context.entrypoint)
+      true  -> leave(stack)
     end
 
     unless is_nil(item) do
       cond do
         not is_list(item) and is_item(item) ->
-          case get_visitor(visitors, item.kind, leaving) do
+          case get_visitor(context.visitors, item.kind, is_leaving) do
             {type, visitor} ->
-              case visitor.(%{item: item, key: key, parent: parent, path: path, ancestors: ancestors}) do
+              case visitor.(Dict.merge(%{item: item}, Map.take(stack, [:key, :parent, :path, :ancestors]))) do
                 %{item: action} -> edit(type, action, item)
                 _               -> nil
               end
@@ -106,25 +87,82 @@ defmodule GraphQL.Lang.Visitor do
         true -> nil
       end
 
-      unless leaving do
-        stack = %Stack{in_list: in_list, index: index, keys: keys, previous: stack}
-        in_list = is_list(item)
-        if parent do
-          ancestors = ancestors ++ [parent]
+      unless is_leaving do
+        if stack.parent do
+          ancestors = stack.ancestors ++ [stack.parent]
+        else
+          ancestors = stack.ancestors
         end
-        keys = get_keys(item)
-        index = -1
-        parent = item
+
+        stack = %Stack{stack |
+          parent: item,
+          keys: Node.children(item),
+          in_list: is_list(item),
+          index: -1,
+          previous: stack,
+          ancestors: ancestors
+        }
       end
     end
 
-    visit(%{root: root, parent: parent, keys: keys, in_list: in_list, index: index,
-            stack: stack, visitors: visitors, path: path, ancestors: ancestors})
+    walk(stack, context)
   end
 
-  defp get_keys(item) when is_map(item),  do: Dict.get(@query_document_keys, item.kind, [])
-  defp get_keys(item) when is_list(item), do: item
-  defp get_keys(_),                       do: []
+  defp leaving?(stack), do: stack.index === length(stack.keys)
+
+  defp enter(stack, entrypoint) do
+    %{parent: parent, in_list: in_list, keys: keys, index: index} = stack
+
+    {item, key} = cond do
+      not is_nil(parent) and in_list     -> {Enum.at(parent, index), index}
+      not is_nil(parent) and not in_list -> {Dict.get(parent, Enum.at(keys, index)), Enum.at(keys, index)}
+      is_nil(parent)                     -> {entrypoint, nil}
+      true                               -> {nil, nil}
+    end
+
+    path = cond do
+      parent && !is_nil(item) -> stack.path ++ [key]
+      true                    -> stack.path
+    end
+
+    {item, %Stack{stack |
+      key: key,
+      path: path
+    }}
+  end
+
+  defp leave(stack = %Stack{previous: nil}), do: {nil, nil}
+  defp leave(stack) do
+    %{ancestors: ancestors} = stack
+
+    {parent, ancestors} = cond do
+      length(ancestors) === 0 -> {nil, []}
+      true                    -> {List.last(ancestors), Enum.drop(ancestors, -1)}
+    end
+
+    {stack.parent, %Stack{stack |
+      key: List.last(stack.path),
+      path: Enum.drop(stack.path, -1),
+      parent: parent,
+      ancestors: ancestors,
+      index: stack.previous.index,
+      keys: stack.previous.keys,
+      in_list: stack.previous.in_list,
+      previous: stack.previous.previous
+    }}
+  end
+
+
+
+
+
+
+
+
+
+
+
+
 
   defp get_visitor(visitors, kind, true),  do: get_visitor(visitors, kind, :leave)
   defp get_visitor(visitors, kind, false), do: get_visitor(visitors, kind, :enter)

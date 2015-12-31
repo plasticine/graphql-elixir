@@ -28,8 +28,8 @@ defmodule GraphQL.Validation.ValidatorTest do
     def greeting(_, _, _), do: "Hello, world!"
   end
 
-  test "DERP" do
-    {:ok, document} = Parser.parse("{ greeting(name:123) }")
-    Validator.validate(TestSchema.schema, document)
-  end
+  # test "DERP" do
+  #   {:ok, document} = Parser.parse("{ greeting(name:123) }")
+  #   Validator.validate(TestSchema.schema, document)
+  # end
 end
