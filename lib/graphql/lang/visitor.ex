@@ -42,14 +42,8 @@ defmodule GraphQL.Lang.Visitor do
   end
 
   defmodule Stack do
-    defstruct ancestors: [],
-              in_list: false,
-              index: -1,
-              key: nil,
-              keys: [],
-              parent: nil,
-              path: [],
-              previous: nil
+    defstruct ancestors: [], in_list: false, index: -1, key: nil, keys: [],
+              parent: nil, path: [], previous: nil
   end
 
   # Depth-first traversal through the tree.
@@ -64,53 +58,58 @@ defmodule GraphQL.Lang.Visitor do
 
   defp walk(stack = nil, context), do: {:ok, context.entrypoint}
   defp walk(stack = %Stack{}, context) do
-    stack = %Stack{stack | index: stack.index + 1}  # TODO: move me
+    stack = %Stack{stack | index: stack.index + 1}
     is_leaving = leaving?(stack)
 
     {item, stack} = case is_leaving do
-      false -> enter(stack, context.entrypoint)
-      true  -> leave(stack)
+      false -> enter_node(stack, context.entrypoint)
+      true  -> leave_node(stack)
     end
 
-    unless is_nil(item) do
-      cond do
-        not is_list(item) and is_item(item) ->
-          case get_visitor(context.visitors, item.kind, is_leaving) do
-            {type, visitor} ->
-              case visitor.(Dict.merge(%{item: item}, Map.take(stack, [:key, :parent, :path, :ancestors]))) do
-                %{item: action} -> edit(type, action, item)
-                _               -> nil
-              end
-            nil -> nil
-          end
-        not is_list(item) -> throw "Invalid AST Node: #{inspect(item)}"
-        true -> nil
-      end
-
-      unless is_leaving do
-        if stack.parent do
-          ancestors = stack.ancestors ++ [stack.parent]
-        else
-          ancestors = stack.ancestors
-        end
-
-        stack = %Stack{stack |
-          parent: item,
-          keys: Node.children(item),
-          in_list: is_list(item),
-          index: -1,
-          previous: stack,
-          ancestors: ancestors
-        }
-      end
-    end
-
-    walk(stack, context)
+    apply_visitors(item, is_leaving, stack, context.visitors)
+    walk(next_node(is_leaving, item, stack), context)
   end
 
   defp leaving?(stack), do: stack.index === length(stack.keys)
 
-  defp enter(stack, entrypoint) do
+  defp apply_visitors(item=nil, is_leaving, stack, visitors), do: nil
+  defp apply_visitors(item, is_leaving, stack, visitors) do
+    cond do
+      not is_list(item) and is_item(item) ->
+        case get_visitor(visitors, item.kind, is_leaving) do
+          {type, visitor} ->
+            # [item: item, key: key, parent: parent, path: path, ancestors: ancestors]
+            case visitor.(Dict.merge(%{item: item}, Map.take(stack, [:key, :parent, :path, :ancestors]))) do
+              %{item: action} -> edit(type, action, item)
+              _               -> nil
+            end
+          nil -> nil
+        end
+      not is_list(item) -> throw "Invalid AST Node: #{inspect(item)}"
+      true -> nil
+    end
+  end
+
+  defp next_node(is_leaving=true, item, stack), do: stack
+  defp next_node(is_leaving, item=nil, stack), do: stack
+  defp next_node(is_leaving=false, item, stack) when is_nil(item), do: stack
+  defp next_node(is_leaving=false, item, stack) do
+    ancestors = cond do
+      stack.parent -> stack.ancestors ++ [stack.parent]
+      true         -> stack.ancestors
+    end
+
+    %Stack{stack |
+      parent: item,
+      keys: Node.children(item),
+      in_list: is_list(item),
+      index: -1,
+      previous: stack,
+      ancestors: ancestors
+    }
+  end
+
+  defp enter_node(stack, entrypoint) do
     %{parent: parent, in_list: in_list, keys: keys, index: index} = stack
 
     {item, key} = cond do
@@ -125,14 +124,11 @@ defmodule GraphQL.Lang.Visitor do
       true                    -> stack.path
     end
 
-    {item, %Stack{stack |
-      key: key,
-      path: path
-    }}
+    {item, %Stack{stack | key: key, path: path}}
   end
 
-  defp leave(stack = %Stack{previous: nil}), do: {nil, nil}
-  defp leave(stack) do
+  defp leave_node(stack = %Stack{previous: nil}), do: {nil, nil}
+  defp leave_node(stack) do
     %{ancestors: ancestors} = stack
 
     {parent, ancestors} = cond do
@@ -151,18 +147,6 @@ defmodule GraphQL.Lang.Visitor do
       previous: stack.previous.previous
     }}
   end
-
-
-
-
-
-
-
-
-
-
-
-
 
   defp get_visitor(visitors, kind, true),  do: get_visitor(visitors, kind, :leave)
   defp get_visitor(visitors, kind, false), do: get_visitor(visitors, kind, :enter)
