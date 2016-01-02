@@ -56,7 +56,7 @@ defmodule GraphQL.Lang.Visitor do
     end
   end
 
-  defp walk(stack = nil, context), do: {:ok, context.entrypoint}
+  defp walk(_stack = nil, context), do: {:ok, context.entrypoint}
   defp walk(stack = %Stack{}, context) do
     stack = %Stack{stack | index: stack.index + 1}
     is_leaving = leaving?(stack)
@@ -72,28 +72,10 @@ defmodule GraphQL.Lang.Visitor do
 
   defp leaving?(stack), do: stack.index === length(stack.keys)
 
-  defp apply_visitors(item=nil, is_leaving, stack, visitors), do: nil
-  defp apply_visitors(item, is_leaving, stack, visitors) do
-    cond do
-      not is_list(item) and is_item(item) ->
-        case get_visitor(visitors, item.kind, is_leaving) do
-          {type, visitor} ->
-            # [item: item, key: key, parent: parent, path: path, ancestors: ancestors]
-            case visitor.(Dict.merge(%{item: item}, Map.take(stack, [:key, :parent, :path, :ancestors]))) do
-              %{item: action} -> edit(type, action, item)
-              _               -> nil
-            end
-          nil -> nil
-        end
-      not is_list(item) -> throw "Invalid AST Node: #{inspect(item)}"
-      true -> nil
-    end
-  end
-
-  defp next_node(is_leaving=true, item, stack), do: stack
-  defp next_node(is_leaving, item=nil, stack), do: stack
-  defp next_node(is_leaving=false, item, stack) when is_nil(item), do: stack
-  defp next_node(is_leaving=false, item, stack) do
+  defp next_node(true, _, stack), do: stack
+  defp next_node(_, nil, stack), do: stack
+  defp next_node(false, item, stack) when is_nil(item), do: stack
+  defp next_node(false, item, stack) do
     ancestors = cond do
       stack.parent -> stack.ancestors ++ [stack.parent]
       true         -> stack.ancestors
@@ -127,7 +109,7 @@ defmodule GraphQL.Lang.Visitor do
     {item, %Stack{stack | key: key, path: path}}
   end
 
-  defp leave_node(stack = %Stack{previous: nil}), do: {nil, nil}
+  defp leave_node(_stack = %Stack{previous: nil}), do: {nil, nil}
   defp leave_node(stack) do
     %{ancestors: ancestors} = stack
 
@@ -148,10 +130,28 @@ defmodule GraphQL.Lang.Visitor do
     }}
   end
 
+  defp apply_visitors(nil, _, _, _), do: nil
+  defp apply_visitors(item, is_leaving, stack, visitors) do
+    cond do
+      not is_list(item) and not is_item(item) -> throw "Invalid AST Node: #{inspect(item)}"
+      is_list(item) -> nil
+      true ->
+        case get_visitor(visitors, item.kind, is_leaving) do
+          {type, visitor} ->
+            args = stack |> Map.take([:key, :parent, :path, :ancestors]) |> Map.merge(%{item: item})
+            case visitor.(args) do
+              %{item: action} -> edit(type, action, item)
+              _               -> nil
+            end
+          nil -> nil
+        end
+    end
+  end
+
   defp get_visitor(visitors, kind, true),  do: get_visitor(visitors, kind, :leave)
   defp get_visitor(visitors, kind, false), do: get_visitor(visitors, kind, :enter)
   defp get_visitor(visitors, kind, type) do
-    # this is pretty gross
+    # TODO: this is pretty gross
     cond do
       Map.has_key?(visitors, kind) ->
         name_key = Map.get(visitors, kind)
