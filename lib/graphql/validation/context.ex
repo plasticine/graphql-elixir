@@ -1,10 +1,22 @@
 defmodule GraphQL.Validation.Context do
   use GenServer
+  alias GraphQL.Utilities.TypeInfo
 
   defstruct errors: [], type_info: %{}
 
   def start_link(schema, document) do
     GenServer.start_link(__MODULE__, [schema, document, %__MODULE__{}])
+  end
+
+  def visitor(pid, schema) do
+    %{
+      enter: fn(args) ->
+        type_info(pid, TypeInfo.enter(schema, args.item))
+      end,
+      leave: fn(args) ->
+        type_info(pid, TypeInfo.leave(schema, args.item))
+      end
+    }
   end
 
   # def argument(pid), do: GenServer.call(pid, :argument)

@@ -7,7 +7,7 @@
 defmodule GraphQL.Validation.Rules.ArgumentsOfCorrectType do
   alias GraphQL.Validation.Context
 
-  def visitor(_, context) do
+  def visitor(context, _) do
     %{
       Argument: fn(%{item: item}) ->
         nil

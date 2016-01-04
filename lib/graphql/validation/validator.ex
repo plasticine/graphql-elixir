@@ -1,10 +1,9 @@
 defmodule GraphQL.Validation.Validator do
   alias GraphQL.Lang.Visitor
-  alias GraphQL.Utilities.TypeInfo
   alias GraphQL.Validation.Context
 
   @visitors [
-    [__MODULE__, :context_visitor],
+    [Context, :visitor],
 
     # Rules
     [GraphQL.Validation.Rules.ArgumentsOfCorrectType, :visitor]
@@ -12,7 +11,7 @@ defmodule GraphQL.Validation.Validator do
 
   def validate(schema, document) do
     {:ok, context} = Context.start_link(schema, document)
-    visitors = get_visitors(@visitors, [schema, context])
+    visitors = get_visitors(@visitors, [context, schema])
     Visitor.visit(document, visitors)
 
     IO.inspect Context.errors(context)
@@ -31,16 +30,5 @@ defmodule GraphQL.Validation.Validator do
         List.flatten([v1] ++ [v2])
       end)
     end)
-  end
-
-  def context_visitor(schema, context) do
-    %{
-      enter: fn(args) ->
-        Context.type_info(context, TypeInfo.enter(schema, args.item))
-      end,
-      leave: fn(args) ->
-        Context.type_info(context, TypeInfo.leave(schema, args.item))
-      end
-    }
   end
 end
