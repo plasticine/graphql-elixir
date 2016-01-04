@@ -12,7 +12,7 @@ defmodule GraphQL.Validation.Rules.ArgumentsOfCorrectType do
       Argument: fn(%{item: item}) ->
         nil
 
-        # Context.error(context, "butts!")
+        # IO.inspect Context.get_state(context)
 
         # IO.inspect Context.get
         # IO.inspect context

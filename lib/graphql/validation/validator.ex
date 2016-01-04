@@ -4,8 +4,6 @@ defmodule GraphQL.Validation.Validator do
 
   @visitors [
     [Context, :visitor],
-
-    # Rules
     [GraphQL.Validation.Rules.ArgumentsOfCorrectType, :visitor]
   ]
 
@@ -13,8 +11,6 @@ defmodule GraphQL.Validation.Validator do
     {:ok, context} = Context.start_link(schema, document)
     visitors = get_visitors(@visitors, [context, schema])
     Visitor.visit(document, visitors)
-
-    IO.inspect Context.errors(context)
 
     case Context.errors(context) do
       {:ok, _}         -> {:ok, document}
