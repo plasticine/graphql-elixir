@@ -42,8 +42,14 @@ defmodule GraphQL.Lang.Visitor do
   end
 
   defmodule Stack do
-    defstruct ancestors: [], in_list: false, index: -1, key: nil, keys: [],
-              parent: nil, path: [], previous: nil
+    defstruct ancestors: [],
+              in_list: false,
+              index: -1,
+              key: nil,
+              keys: [],
+              parent: nil,
+              path: [],
+              previous: nil
   end
 
   # Depth-first traversal through the tree.

@@ -2,9 +2,7 @@ defmodule GraphQL.Validation.ValidatorTest do
   use ExUnit.Case, async: true
 
   alias GraphQL.Lang.Parser
-  alias GraphQL.Lang.Visitor
   alias GraphQL.Validation.Validator
-  alias GraphQL.Validation.Rules
 
   defmodule TestSchema do
     def schema do

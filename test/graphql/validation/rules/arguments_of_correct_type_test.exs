@@ -1,10 +1,10 @@
 defmodule GraphQL.Validation.Rules.ArgumentsOfCorrectTypeTest do
   use ExUnit.Case, async: true
 
-  alias GraphQL.Lang.Parser
-  alias GraphQL.Lang.Visitor
-  alias GraphQL.Validation.Validator
-  alias GraphQL.Validation.Rules
+  # alias GraphQL.Lang.Parser
+  # alias GraphQL.Lang.Visitor
+  # alias GraphQL.Validation.Validator
+  # alias GraphQL.Validation.Rules
 
   defmodule TestSchema do
     def schema do
@@ -28,10 +28,10 @@ defmodule GraphQL.Validation.Rules.ArgumentsOfCorrectTypeTest do
     def greeting(_, _, _), do: "Hello, world!"
   end
 
-  test "type is an int" do
-    {:ok, document} = Parser.parse("{ greeting(name:123) }")
-    context = %GraphQL.Validation.Context{schema: TestSchema.schema, document: document}
-    visitors = Rules.ArgumentsOfCorrectType.visitor()
-    Visitor.visit(document, visitors)
-  end
+  # test "type is an int" do
+  #   {:ok, document} = Parser.parse("{ greeting(name:123) }")
+  #   context = %GraphQL.Validation.Context{schema: TestSchema.schema, document: document}
+  #   visitors = Rules.ArgumentsOfCorrectType.visitor()
+  #   Visitor.visit(document, visitors)
+  # end
 end
