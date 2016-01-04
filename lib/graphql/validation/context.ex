@@ -14,17 +14,23 @@ defmodule GraphQL.Validation.Context do
 
   # GenServer callbacks
   def init(schema, document, context) do
-    {:ok, {schema, document, context}}
+    {:ok, [schema, document, context]}
   end
 
-  def handle_call(:errors, _from, state = [_, _, context]) do
+  def handle_call(:errors, _, state = [_, _, context]) do
     case Enum.any?(context.errors) do
       true  -> {:reply, {:error, context.errors}, state}
       false -> {:reply, {:ok, context.errors}, state}
     end
   end
 
-  def handle_call({:type_info, type_info}, _from, state = [_, _, context]) do
-    {:reply, %__MODULE__{context | type_info: type_info}, state}
+  def handle_call({:error, error}, _, [schema, document, context]) do
+    context = %__MODULE__{context | errors: [error | context.errors]}
+    {:reply, context, [schema, document, context]}
+  end
+
+  def handle_call({:type_info, type_info}, _, [schema, document, context]) do
+    context =  %__MODULE__{context | type_info: type_info}
+    {:reply, context, [schema, document, context]}
   end
 end

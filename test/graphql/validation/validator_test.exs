@@ -28,6 +28,6 @@ defmodule GraphQL.Validation.ValidatorTest do
 
   test "DERP" do
     {:ok, document} = Parser.parse("{ greeting(name:123) }")
-    Validator.validate(TestSchema.schema, document)
+    {:ok, _} = Validator.validate(TestSchema.schema, document)
   end
 end

@@ -7,10 +7,12 @@
 defmodule GraphQL.Validation.Rules.ArgumentsOfCorrectType do
   alias GraphQL.Validation.Context
 
-  def visitor(_, _) do
+  def visitor(_, context) do
     %{
       Argument: fn(%{item: item}) ->
         nil
+
+        # Context.error(context, "butts!")
 
         # IO.inspect Context.get
         # IO.inspect context

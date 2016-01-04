@@ -15,6 +15,8 @@ defmodule GraphQL.Validation.Validator do
     visitors = get_visitors(@visitors, [schema, context])
     Visitor.visit(document, visitors)
 
+    IO.inspect Context.errors(context)
+
     case Context.errors(context) do
       {:ok, _}         -> {:ok, document}
       {:error, errors} -> {:error, errors}
